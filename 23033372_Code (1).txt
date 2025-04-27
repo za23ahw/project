@@ -1,0 +1,333 @@
+import pandas as pd ## reading dataframe
+import numpy as np ##  mathematical operation
+# Preprocessing libraries
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler  # For encoding categorical variables and feature scaling
+# Visualization libraries
+import plotly.express as px  # To create interactive plots
+import plotly.graph_objects as go  # For more customized interactive visualizations
+import seaborn as sns  # For statistical data visualization
+import matplotlib.pyplot as plt  # For basic plotting
+# Data balancing library
+from sklearn.utils import resample  # To balance the dataset using oversampling or undersampling
+# Model selection and hyperparameter tuning
+from sklearn.model_selection import train_test_split, GridSearchCV  # For data splitting and hyperparameter tuning
+# Machine learning models
+from sklearn.linear_model import LogisticRegression  # Logistic Regression model for classification
+from sklearn.neighbors import KNeighborsClassifier  # K-Nearest Neighbors classifier
+from sklearn.ensemble import GradientBoostingClassifier, VotingClassifier  # Ensemble models
+# Evaluation metrics
+from sklearn import metrics  # For accuracy, precision, recall, and other metrics
+from sklearn.metrics import confusion_matrix, classification_report, cohen_kappa_score  # Detailed evaluation reports
+# Deep learning libraries (TensorFlow/Keras)
+import tensorflow as tf  # Deep learning framework
+from tensorflow.keras.models import Sequential  # For building sequential neural networks
+from tensorflow.keras.layers import Dense, Dropout  # Dense layers and dropout for regularization
+import warnings  # Warnings module is used to manage warnings in the code.
+warnings.filterwarnings("ignore")  # This line suppresses warnings to avoid clutter in the output
+
+## Data Reading
+
+df = pd.read_csv('/content/Heart Disease.csv')
+df
+
+## Data Analysis and Cleaning
+
+# 1. Dataset Overview
+print("\nDataset Shape:", df.shape)
+print("\nColumn Names:\n", df.columns)
+print("\nData Types:\n", df.dtypes)
+# 2. Check for Missing Values
+print("\nMissing Values per Column:\n", df.isnull().sum())
+# 3. Descriptive Statistics
+print("\nDescriptive Statistics (Numerical):\n", df.describe())
+print("\nDescriptive Statistics (Categorical):\n", df.describe(include='object'))
+
+# Bar Plot 1
+fig1 = px.bar(df, x='AgeCategory', y='BMI', title='BMI by Age Category', color='AgeCategory')
+fig1.show()
+
+# Bar Plot 2
+fig2 = px.bar(df, x='GenHealth', y='SleepTime', title='Sleep Time by General Health', color='GenHealth')
+fig2.show()
+
+# Pie Chart
+fig3 = px.pie(df, names='HeartDisease', title='Heart Disease Distribution')
+fig3.show()
+
+# Scatter Plot 1
+fig4 = px.scatter(df, x='BMI', y='PhysicalHealth', color='HeartDisease', title='BMI vs Physical Health')
+fig4.show()
+
+# Scatter Plot 2
+fig5 = px.scatter(df, x='SleepTime', y='MentalHealth', color='HeartDisease', title='Sleep Time vs Mental Health')
+fig5.show()
+
+# Histogram
+fig6 = px.histogram(df, x='BMI', title='BMI Distribution')
+fig6.show()
+
+# Line Plot
+fig7 = px.line(df.groupby('AgeCategory')['BMI'].mean().reset_index(), x='AgeCategory', y='BMI', title='Average BMI by Age Category')
+fig7.show()
+
+# Box Plot
+fig8 = px.box(df, x='HeartDisease', y='SleepTime', title='Sleep Time by Heart Disease')
+fig8.show()
+
+# Violin Plot
+fig9 = px.violin(df, y='BMI', x='GenHealth', color='HeartDisease', title='BMI Distribution by General Health')
+fig9.show()
+
+# 5. Encoding Categorical Variables (Label Encoding)
+le = LabelEncoder()
+for col in df.select_dtypes(include=['object']).columns:
+    df[col] = le.fit_transform(df[col])
+
+
+# Initialize MinMaxScaler
+scaler = MinMaxScaler()
+# Select numerical columns for MinMax scaling
+num_cols = ['BMI', 'PhysicalHealth', 'MentalHealth', 'SleepTime']
+# Apply MinMax scaling to numerical columns
+df[num_cols] = scaler.fit_transform(df[num_cols])
+
+
+# 8. Target Variable Balance Check
+plt.figure(figsize=(8, 6))
+sns.countplot(x='HeartDisease', data=df)
+plt.title('Heart Disease Class Distribution')
+plt.show()
+
+# Balance the Dataset
+# Separate majority and minority classes
+df_majority = df[df['HeartDisease'] == 0]
+df_minority = df[df['HeartDisease'] == 1]
+
+# Upsample minority class
+df_minority_upsampled = resample(df_minority,
+                                 replace=True,    # sample with replacement
+                                 n_samples=len(df_majority), # to match majority class
+                                 random_state=42)
+
+# Combine majority class with upsampled minority class
+df = pd.concat([df_majority, df_minority_upsampled])
+
+# Display new class distribution
+plt.figure(figsize=(8,4))
+sns.countplot(x='HeartDisease', data=df)
+plt.title('Balanced Heart Disease Class Distribution')
+plt.show()
+
+
+# Split the dataset into features and target variable
+X = df.drop('HeartDisease', axis=1)
+y = df['HeartDisease']
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Define and train different machine learning models
+models = {
+    'Logistic Regression': LogisticRegression(),
+    'KNN': KNeighborsClassifier(),
+    'Gradient Boosting': GradientBoostingClassifier()
+}
+
+params = {
+    'Logistic Regression': {'C': [0.1, 1, 10], 'penalty': ['l1', 'l2'], 'solver': ['liblinear']},
+    'KNN': {'n_neighbors': [3, 5, 7], 'weights': ['uniform', 'distance']},
+    'Gradient Boosting': {'n_estimators': [100, 200], 'learning_rate': [0.01, 0.1], 'max_depth': [3, 5]}
+}
+
+
+best_estimators = {}
+
+for model_name, model in models.items():
+    print(f"\nTraining {model_name}...")
+    grid_search = GridSearchCV(model, params[model_name], cv=5, n_jobs=-1, verbose=1, scoring="accuracy")
+    grid_search.fit(X_train, y_train)
+    best_estimators[model_name] = grid_search.best_estimator_
+    print(f"Best parameters for {model_name}: {grid_search.best_params_}")
+    print(f"Best cross-validation score for {model_name}: {grid_search.best_score_ * 100:.2f}%")
+
+    # Predictions
+    y_pred = grid_search.best_estimator_.predict(X_test)
+    print(f"\nAccuracy of {model_name} on test data: {metrics.accuracy_score(y_test, y_pred):.2f}")
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred))
+    print(f"Cohen's Kappa Statistic for {model_name}: {cohen_kappa_score(y_test, y_pred):.2f}")
+
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
+    plt.title(f'Confusion Matrix - {model_name}')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.show()
+
+
+# Hybrid Model using Voting Classifier
+voting_clf = VotingClassifier(estimators=[
+    ('lr', best_estimators['Logistic Regression']),
+    ('knn', best_estimators['KNN']),
+    ('gb', best_estimators['Gradient Boosting'])
+], voting='hard')
+
+voting_clf.fit(X_train, y_train)
+y_pred_voting = voting_clf.predict(X_test)
+
+print("\nAccuracy of Hybrid Voting Classifier on test data:", metrics.accuracy_score(y_test, y_pred_voting))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred_voting))
+print(classification_report(y_test, y_pred_voting))
+print("Cohen's Kappa Statistic for Hybrid Model:", cohen_kappa_score(y_test, y_pred_voting))
+
+plt.figure(figsize=(6, 4))
+sns.heatmap(confusion_matrix(y_test, y_pred_voting), annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion Matrix - Hybrid Voting Classifier')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Model names
+models = ['Logistic Regression', 'KNN Model', 'Gradient Boosting']
+
+# Performance metrics
+accuracy = [0.73, 0.93, 0.88]
+kappa = [0.47, 0.86, 0.75]
+cv_score = [74.3, 92.4, 86.9]
+
+# Convert CV scores to 0-1 range for consistent plotting (optional)
+cv_score_normalized = [score / 100 for score in cv_score]
+
+# Set position of bar on X axis
+x = np.arange(len(models))
+width = 0.25  # Width of the bars
+
+# Create subplots
+fig, ax = plt.subplots(figsize=(8,4))
+
+# Plot bars
+bars1 = ax.bar(x - width, accuracy, width, label='Accuracy')
+bars2 = ax.bar(x, kappa, width, label='Kappa Statistics')
+bars3 = ax.bar(x + width, cv_score_normalized, width, label='Best CV Score')
+
+# Labels and formatting
+ax.set_xlabel('Models')
+ax.set_ylabel('Scores')
+ax.set_title('Model Performance Comparison')
+ax.set_xticks(x)
+ax.set_xticklabels(models)
+ax.set_ylim(0, 1.1)
+ax.legend()
+
+# Annotate each bar with its value
+for bars in [bars1, bars2, bars3]:
+    for bar in bars:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f'{yval:.2f}', ha='center', va='bottom')
+
+# Show plot
+plt.tight_layout()
+plt.show()
+
+
+## Application Dashboard
+
+!pip install dash jupyter_dash pandas plotly
+
+from dash import Dash, dcc, html
+import pandas as pd
+import plotly.express as px
+
+# Load your dataset
+df = pd.read_csv("Heart Disease.csv")
+
+# Convert categorical columns if needed
+df["Stroke"] = df["Stroke"].map({"Yes": 1, "No": 0})
+df["DiffWalking"] = df["DiffWalking"].map({"Yes": 1, "No": 0})
+df["Diabetic"] = df["Diabetic"].map({"Yes": 1, "No": 0})
+df["PhysicalActivity"] = df["PhysicalActivity"].map({"Yes": 1, "No": 0})
+
+# Initialize Dash app
+app = Dash(__name__)
+
+# 1. Pie Chart: Stroke Distribution
+fig1 = px.pie(df, names="Stroke", title="Stroke Distribution", color="Stroke",
+              color_discrete_map={0: "lightblue", 1: "crimson"},
+              labels={"Stroke": "Stroke"})
+fig1.update_traces(textposition="inside", textinfo="percent+label")
+
+# 2. Bar Plot: Stroke by Physical Activity
+fig2 = px.histogram(df, x="PhysicalActivity", color="Stroke",
+                    barmode="group", title="Physical Activity vs Stroke",
+                    labels={"PhysicalActivity": "Physical Activity", "Stroke": "Stroke"},
+                    color_discrete_map={0: "green", 1: "red"})
+
+# 3. Box Plot: PhysicalHealth by Stroke
+fig3 = px.box(df, x="Stroke", y="PhysicalHealth", color="Stroke",
+              title="Physical Health by Stroke",
+              labels={"Stroke": "Stroke", "PhysicalHealth": "Physical Health Score"},
+              color_discrete_map={0: "blue", 1: "orange"})
+
+# 4. Count Plot: Stroke by Age Category
+fig4 = px.histogram(df, x="AgeCategory", color="Stroke",
+                    title="Age Category vs Stroke",
+                    barmode="group",
+                    category_orders={"AgeCategory": ["18-24", "25-29", "30-34", "35-39", "40-44", "45-49",
+                                                     "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80 or older"]},
+                    color_discrete_map={0: "teal", 1: "firebrick"})
+
+# 5. Scatter Plot: Mental vs Physical Health
+fig5 = px.scatter(df, x="MentalHealth", y="PhysicalHealth", color="Stroke",
+                  title="Mental vs Physical Health by Stroke",
+                  labels={"Stroke": "Stroke", "MentalHealth": "Mental Health", "PhysicalHealth": "Physical Health"},
+                  color_discrete_map={0: "navy", 1: "darkred"})
+
+# 6. Bar Plot: Stroke by General Health
+fig6 = px.histogram(df, x="GenHealth", color="Stroke", barmode="group",
+                    title="Stroke by General Health Rating",
+                    labels={"GenHealth": "General Health", "Stroke": "Stroke"},
+                    category_orders={"GenHealth": ["Poor", "Fair", "Good", "Very good", "Excellent"]},
+                    color_discrete_map={0: "green", 1: "darkorange"})
+
+# 7. Bar Plot: Heart Disease by Stroke
+fig7 = px.histogram(df, x="Stroke", color="HeartDisease",
+                    barmode="group",
+                    title="Heart Disease Distribution by Stroke",
+                    labels={"HeartDisease": "Heart Disease", "Stroke": "Stroke"},
+                    color_discrete_map={"Yes": "firebrick", "No": "skyblue"})
+
+# 8. Pie Chart: Heart Disease Proportion
+fig8 = px.pie(df, names="HeartDisease", title="Heart Disease Proportion",
+              color="HeartDisease",
+              color_discrete_map={"Yes": "red", "No": "green"})
+fig8.update_traces(textposition="inside", textinfo="percent+label")
+
+# App layout
+app.layout = html.Div([
+    html.H1("Heart Health Dashboard", style={"textAlign": "center"}),
+
+    dcc.Graph(figure=fig1),
+    dcc.Graph(figure=fig2),
+    dcc.Graph(figure=fig3),
+    dcc.Graph(figure=fig4),
+    dcc.Graph(figure=fig5),
+    dcc.Graph(figure=fig6),
+    dcc.Graph(figure=fig7),
+    dcc.Graph(figure=fig8),
+])
+
+# Run server
+if __name__ == '__main__':
+    app.run(host='localhost', port=8053, debug=True)
+
+
+
+
+
+
+
+
+
